@@ -1,6 +1,13 @@
 #ifndef _LOG_H_
 #define _LOG_H_
 
+#include "block_queue.h"
+#include <stdio.h>
+#include <iostream>
+#include <stdarg.h>
+#include <pthread.h>
+#include <cstring>
+
 class Log
 {
 public:
