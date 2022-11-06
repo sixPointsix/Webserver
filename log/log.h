@@ -24,6 +24,7 @@ public:
     //异步写日志的公有方法
     static void* flush_log_thread(void* args) {
         Log::get_instance()->async_write_log();
+        return NULL;
     }
 
     //标准格式输入写日志，分成日志级别
@@ -37,12 +38,15 @@ private:
     virtual ~Log();
 
     void* async_write_log() {
+
         string log;
-        while(m_log_queue.pop(log)) {
+        while(m_log_queue->pop(log)) {
             m_mutex.lock();
             fputs(log.c_str(), m_fp);
             m_mutex.unlock();
         }
+
+        return NULL;
     }
 
 private:

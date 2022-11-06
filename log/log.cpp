@@ -12,11 +12,11 @@ Log::Log() {
     m_is_async = false;
 }
 
-Log::Log() {
+Log::~Log() {
     if(m_fp != NULL) fclose(m_fp);
 }
 
-void Log::init(const char* file_name, int log_buf_size, int split_lines, int max_queue_size)
+bool Log::init(const char* file_name, int log_buf_size, int split_lines, int max_queue_size)
 {
     if(max_queue_size > 0) {
         m_is_async = true;
@@ -49,10 +49,10 @@ void Log::init(const char* file_name, int log_buf_size, int split_lines, int max
     else {
         p ++;
         strcpy(log_name, p);
-        strncpy(dir_name, filename, p - filename);
+        strncpy(dir_name, file_name, p - file_name);
 
         snprintf(log_full_name, 255, "%s%d_%02d_%02d_%s", 
-                dir_name, my_tm.tm_year + 1900, my_tm.tm_mon + 1, my_tm.mday, log_name);
+                dir_name, my_tm.tm_year + 1900, my_tm.tm_mon + 1, my_tm.tm_mday, log_name);
     }
 
     m_today = my_tm.tm_mday;
@@ -68,7 +68,7 @@ void Log::write_log(int log_level, const char* format, ...)
     gettimeofday(&now, NULL);
     time_t t = now.tv_sec;
     struct tm* sys_tm = localtime(&t);
-    struct tm my_tm = &sys_tm; //获取时间
+    struct tm my_tm = *sys_tm; //获取时间
 
     char s[16] = {0};
     switch(log_level) {
@@ -105,8 +105,8 @@ void Log::write_log(int log_level, const char* format, ...)
 
         //如果是新的一天
         if(m_today != my_tm.tm_mday) {
-            snpintf(new_log, 255, "%s%s%s", dir_name, new_time, log_name);
-            my_today = my_tm.tm_mday;
+            snprintf(new_log, 255, "%s%s%s", dir_name, new_time, log_name);
+            m_today = my_tm.tm_mday;
             m_count = 0;
         }
         //如果是行数达到上限新开文件，名字就是原文件名+数字后缀
@@ -128,7 +128,7 @@ void Log::write_log(int log_level, const char* format, ...)
     //年月日 小时:分:秒.微秒 日志级别
     int n = snprintf(m_buf, 48, "%d-%02d-%02d %02d:%02d:%02d.%06ld %s",
                      my_tm.tm_year + 1900, my_tm.tm_mon + 1, my_tm.tm_mday,
-                     my_tm.tm_hour, my_tm.tm_min, my_tm.sec, now.tv_usec, s);
+                     my_tm.tm_hour, my_tm.tm_min, my_tm.tm_sec, now.tv_usec, s);
     //日志内容写入缓冲区
     int m = vsnprintf(m_buf + n, m_log_buf_size - 1, format, valst);
     m_buf[n + m] = '\n';
