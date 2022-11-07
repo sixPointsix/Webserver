@@ -139,7 +139,7 @@ void Log::write_log(int log_level, const char* format, ...)
 
     //同步就直接写，异步就加入阻塞队列
     if(m_is_async && !m_log_queue->full()) {
-        m_log_queue->push(log_str);
+        auto res = m_log_queue->push(log_str);
     } else {
         m_mutex.lock();
         fputs(log_str.c_str(), m_fp);

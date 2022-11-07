@@ -19,7 +19,7 @@ public:
     }
     ~block_queue() {}
 
-    bool push(T& item) {
+    bool push(const T& item) {
         m_mutex.lock();
         if(m_size >= m_capacity) {
             m_cond.broadcast();

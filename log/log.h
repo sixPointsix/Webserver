@@ -1,6 +1,7 @@
 #ifndef _LOG_H_
 #define _LOG_H_
 
+#include <unistd.h>
 #include "block_queue.h"
 #include <stdio.h>
 #include <iostream>
@@ -38,7 +39,6 @@ private:
     virtual ~Log();
 
     void* async_write_log() {
-
         string log;
         while(m_log_queue->pop(log)) {
             m_mutex.lock();
