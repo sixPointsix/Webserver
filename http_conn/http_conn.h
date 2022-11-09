@@ -69,7 +69,7 @@ public:
     ~http_conn() {}
 
 public:
-    void init(int sockfd, const sockaddr_in& addr, string user, string password, string sqlname);
+    void init(int sockfd, const sockaddr_in& addr, char* root, int TRIGMode, int close_log, string user, string password, string sqlname);
     void close_conn(bool real_close = true);
     void process(); //处理客户请求
     bool read_once(); //非阻塞读
@@ -81,6 +81,14 @@ public:
     void initmysql_result(connection_pool* connPool);
     int timer_flag; // 定时器标志
     int improv;
+
+public:
+    //所有socket的时间都被注册在同一个epoll内核时间表中，所以m_epollfd是静态的
+    static int m_epollfd;
+    //用户数量，静态成员
+    static int m_user_count;
+    MYSQL* mysql; //数据库
+    int m_state; //读为0，写为1
 
 private:
     void init(); //初始化
@@ -106,14 +114,6 @@ private:
     bool add_linger();
     bool add_blank_line();
 
-public:
-    //所有socket的时间都被注册在同一个epoll内核时间表中，所以m_epollfd是静态的
-    static int m_epollfd;
-    //用户数量
-    static int m_user_count;
-    MYSQL* mysql; //数据库
-    int m_state; //读为0，写为1
-
 private:
     //该http连接的通信socket
     int m_sockfd;
@@ -133,7 +133,7 @@ private:
     METHOD m_method;
 
     char m_real_file[FILENAME_LEN];
-    char* url;
+    char* m_url;
     char* m_version;
     char* m_host;
     int m_content_length;
@@ -153,10 +153,10 @@ private:
     int bytes_have_send;
     char* doc_root;
     unordered_map<string, string> m_users;
-    int m_TRIGMode;
+    int m_TRIGMode; //epoll模式，0为LT，1为ET
     int m_close_log;
     char sql_user[100];
-    char sql_passwd[100];
+    char sql_password[100];
     char sql_name[100];
 };
 

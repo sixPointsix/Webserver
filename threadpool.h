@@ -136,7 +136,7 @@ void run() {
                     request->improv = 1;
                 }
                 else {
-                    request->improve = 1;
+                    request->improv = 1;
                     request->timer_flag = 1;
                 }
             }
