@@ -33,7 +33,7 @@ public:
     //读写缓冲区大小
     static const int READ_BUFFER_SIZE = 2048;
     static const int WRITE_BUFFER_SIZE = 1024;
-    //http请求方法
+    //http请求方法，本server解析GET, POST
     enum METHOD {
         GET = 0,
         POST,
@@ -148,7 +148,7 @@ private:
     int m_iv_count;
 
     int cgi; //是否启用的post
-    char* m_string; //储存请求头的数据
+    char* m_string; //储存请求体的数据
     int bytes_to_send;
     int bytes_have_send;
     char* doc_root;

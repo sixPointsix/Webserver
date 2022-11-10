@@ -13,6 +13,7 @@ const char* error_404_form = "The file you request was not found in this server.
 const char* error_500_title = "Internal Error";
 const char* error_500_form = "There was an unusual problem serving the request file.\n";
 
+//全局的互斥锁和用户列表
 locker m_lock;
 unordered_map<string, string> users;
 
@@ -218,16 +219,222 @@ http_conn::LINE_STATUS http_conn::parse_line() {
 }
 
 //解析请求行
+//方法，url，版本
 http_conn::HTTP_CODE http_conn::parse_request_line(char* text) {
+    m_url = strpbrk(text, " \t"); //返回第一个匹配字符的后续字符串
+    if(!m_url) return BAD_REQUEST;
+    *m_url ++ = '\0';
 
+    char* method = text;
+    if(strcasecmp(method, "GET") == 0) {
+        m_method = GET;
+    } else if(strcasecmp(method, "POST") == 0) {
+        m_method = POST;
+        cgi = 1; // 标记一下启用POST
+    } else {
+        return BAD_REQUEST;
+    }
+
+    m_url += strspn(m_url, " \t"); //返回str1第一个不在str2中出现的下标
+    m_version = strpbrk(m_url, " \t");
+    if(!m_version) return BAD_REQUEST;
+    *m_version ++ = '\0';
+    m_version += strspn(m_url, " \t");
+
+    if(strcasecmp(m_version, "HTTP/1.1") != 0)
+        return BAD_REQUEST; //只解析HTTP/1.1
+
+    if(strncasecmp(m_url, "http://", 7) == 0) {
+        m_url += 7;
+        m_url = strchr(m_url, '/');
+    }
+    if(strncasecmp(m_url, "https://", 8) == 0) {
+        m_url += 8;
+        m_url = strchr(m_url, '/');
+    }
+
+    if(!m_url || m_url[0] != '/')
+        return BAD_REQUEST;
+    if(strlen(m_url) == 1) m_url = "/judge.html"; //默认url
+
+    m_check_state = CHECK_STATE_HEADERS;
+
+    return NO_REQUEST;
 }
 
 //解析头部字段
 http_conn::HTTP_CODE http_conn::parse_headers(char* text) {
+    if(text[0] == '\0') {
+        //parse_line中已经把"\r\n"转换为'\0'了
+        //直接读到'\0'说明一行已经结束
+        if(m_content_length == 0) {
+            return GET_REQUEST;
+        } else {
+            m_check_state = CHECK_STATE_CONTENT;
+            return NO_REQUEST;
+        }
+    }
 
+    //处理三个头部字段：Connection, Content-Length, Host
+    else if (strncasecmp(text, "Connection:", 11) == 0)
+    {
+        text += 11;
+        text += strspn(text, " \t");
+        if (strcasecmp(text, "keep-alive") == 0)
+        {
+            m_linger = true;
+        }
+    }
+    else if (strncasecmp(text, "Content-length:", 15) == 0)
+    {
+        text += 15;
+        text += strspn(text, " \t");
+        m_content_length = atol(text);
+    }
+    else if (strncasecmp(text, "Host:", 5) == 0)
+    {
+        text += 5;
+        text += strspn(text, " \t");
+        m_host = text;
+    }
+    else
+    {
+        LOG_INFO("Server can't parse this header: %s", text);
+    }
+    return NO_REQUEST;
 }
 
 //解析请求体，其实就是判断它是不是被完整读入了
 http_conn::HTTP_CODE http_conn::parse_content(char* text) {
+    //m_checked_idx最多只读到请求头结束
+    if(m_read_idx >= m_checked_idx + m_content_length) {
+        text[m_content_length] = '\0';
+        //保存请求体的数据，因为POST最后的用户名密码在请求体中
+        m_string = text;
+        return GET_REQUEST;
+    }
 
+    return NO_REQUEST;
 }
+
+//得到合法且完整的http请求后，我们就分析目标文件的属性，若目标文件存在且不是文件夹，而且所有用户都有读的权限，就把该文件mmap映射到m_file_address处，返回成功
+http_conn::HTTP_CODE http_conn::do_request() {
+    //获取文件名根路径 m_real_file = doc_root + m_url
+    strcpy(m_real_file, doc_root);
+    int len = strlen(doc_root);
+
+    //处理cgi
+    const char* p = strchr(m_url, '/');
+    if(cgi == 1 && (*(p + 1) == '2' || *(p + 1) == '3'))
+    {
+        //根据标志判断是登录检测或是注册检测
+        char flag = m_url[1];
+
+        char* m_real_url = new char[200];
+        strcpy(m_real_url, "/");
+        strcat(m_real_url, m_url + 2);
+        strncpy(m_real_file + len, m_real_url, FILENAME_LEN - len - 1);
+        delete [] m_real_url;
+
+        //提取出用户名和密码，在m_string中
+        //格式：user=root&password=root
+        sting username, password;
+        int i;
+        for(i = 5; m_string != '&'; ++ i)
+            username += m_string[i];
+
+        for(i = i + 10, j = 0; m_string[i]; ++ i, ++ j)
+            password += m_string[j];
+
+        if(*(p + 1) == '2') { //登录
+            if(users[username] == password) {
+                strcpy(m_url, "/welcome.html");
+            } else {
+                strcpy(m_url, "/logError.html");
+            }
+        }
+        else if(*(p + 1) == '3') { //注册
+            //先检测数据库中有无重名的
+            //若没有重名的，就增加数据
+            string sql_insert = "INSERT INTO USER(username, passwd) VALUES('"+ username + "', '" + password + "')";
+
+            if(!users.count(username))
+            {
+                m_lock.lock();
+                int res = mysql_query(mysql, sql_insert.c_str());
+                users[username] = password;
+                m_lock.unlock();
+
+                if(!res) strcpy(m_url, "/log.html");
+                else strcpy(m_url, "/registerError.html");
+            }
+            else strcpy(m_url, "/registerError.html");
+       }
+    }
+
+    if(*(p + 1) == '0') {
+        char* m_real_url = new char[200];
+        strcpy(m_real_url, "/register.html");
+        strncpy(m_real_file + len, m_real_url, strlen(m_real_url));
+
+        delete [] m_real_url;
+    }
+    else if(*(p + 1) == '1') {
+        char* m_real_url = new char[200];
+        strcpy(m_real_url, "/log.html");
+        strncpy(m_real_file + len, m_real_url, strlen(m_real_url));
+
+        delete [] m_real_url;
+    }
+    else if(*(p + 1) == '5') {
+        char* m_real_url = new char[200];
+        strcpy(m_real_url, "/picture.html");
+        strncpy(m_real_file + len, m_real_url, strlen(m_real_url));
+
+        delete [] m_real_url;
+    }
+    else if(*(p + 1) == '6') {
+        char* m_real_url = new char[200];
+        strcpy(m_real_url, "/video.html");
+        strncpy(m_real_file + len, m_real_url, strlen(m_real_url));
+
+        delete [] m_real_url;
+    }
+    else if(*(p + 1) == '7') {
+        char* m_real_url = new char[200];
+        strcpy(m_real_url, "/fans.html");
+        strncpy(m_real_file + len, m_real_url, strlen(m_real_url));
+
+        delete [] m_real_url;
+    }
+    else {
+        strncpy(m_real_file + len, m_url, FILENAME_LEN - len - 1);
+    }
+
+    //判断目标文件是否存在及其属性
+    if(stat(m_real_file, &m_file_stat) < 0) {
+        return NO_RESOURCE;
+    }
+    if(!(m_file_stat.st_mode & S_IROTH)) { //其他用户是否有可读权限
+        return FORBIDDEN_REQUEST;
+    }
+    if(S_ISDIR(m_file_stat.st_mode)) { //是否是文件夹
+        return BAD_REQUEST;
+    }
+
+    int fd = open(m_real_file, O_RDONLY);
+    //将该文件内存映射到m_file_address处
+    //是一个私有文件映射
+    m_file_address = (char*)mmap(NULL, m_file_stat.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+    close(fd);
+
+    return FILE_REQUEST;
+}
+
+void http_conn::unmap() {
+    if(m_file_address) {
+        munmap(m_file_address, m_file_stat.st_size);
+        m_file_address = nullptr; //谨记！防止内存泄露
+    }
+}
+
