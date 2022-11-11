@@ -438,3 +438,193 @@ void http_conn::unmap() {
     }
 }
 
+//写http响应报文
+bool http_conn::write() {
+    int tmp = 0;
+
+    if(bytes_to_send == 0) { //本次任务结束
+        modfd(m_epollfd, m_sockfd, EPOLLIN, m_TRIGMode);
+        init();
+        return true;
+    }
+
+    while(1) {
+        tmp = writev(m_sockfd, m_iv, m_iv_count);
+        if(tmp <= -1) {
+            //如果tcp写缓存没有空间，则等待下一轮EPOLLOUT事件
+            //虽然在此期间，服务器没法立即接受到同一客户的下一个请求，但可以保证链接的完整性
+            if(errno == EAGAIN) {
+                modfd(m_epollfd, m_sockfd, EPOLLOUT, m_TRIGMode);
+                return true;
+            }
+
+            unmap();
+            return false;
+        }
+        bytes_to_send -= tmp;
+        bytes_have_send += tmp;
+        if(bytes_have_send >= m_iv[0].iov_len) {
+            m_iv[0].iov_len = 0;
+            m_iv[1].iov_base = m_file_address + (bytes_have_send - m_write_idx);
+            m_iv[1].iov_len = bytes_to_send;
+        }
+        else {
+            m_iv[0].base = m_write_buf + bytes_have_send;
+            m_iv[0].iov_len -= bytes_have_send;
+        }
+
+        if(bytes_to_send <= 0) { //全部发送成功
+            unmap();
+            modfd(m_epollfd, m_sockfd, EPOLLIN);
+            //根据m_linger决定是否keep-alive
+            if(m_linger) {
+                init();
+                return true;
+            } else {
+                return false;
+            }
+        }
+    }
+}
+
+bool http_conn::process_read(HTTP_CODE ret) {
+    switch(ret)
+    {
+        case INTERNAL_ERROR:
+        {
+            add_status_line(500, error_500_title);
+            add_headers(strlen(error_500_form));
+            if (!add_content(error_500_form))
+                return false;
+            break;
+        }
+        case BAD_REQUEST:
+        {
+            add_status_line(404, error_404_title);
+            add_headers(strlen(error_404_form));
+            if (!add_content(error_404_form))
+                return false;
+            break;
+        }
+        case FORBIDDEN_REQUEST:
+        {
+            add_status_line(403, error_403_title);
+            add_headers(strlen(error_403_form));
+            if (!add_content(error_403_form))
+                return false;
+            break;
+        }
+        case FILE_REQUEST:
+        {
+            //读取文件成功
+            add_status_line(200, ok_200_title);
+            if (m_file_stat.st_size != 0)
+            {
+                add_headers(m_file_stat.st_size);
+                m_iv[0].iov_base = m_write_buf;
+                m_iv[0].iov_len = m_write_idx;
+                m_iv[1].iov_base = m_file_address;
+                m_iv[1].iov_len = m_file_stat.st_size;
+                m_iv_count = 2;
+                bytes_to_send = m_write_idx + m_file_stat.st_size;
+                return true;
+            }
+            else
+            {
+                const char *ok_string = "<html><body></body></html>";
+                add_headers(strlen(ok_string));
+                if (!add_content(ok_string))
+                    return false;
+            }
+        }
+        default:
+            return false;
+    }
+
+    //默认下来的是没有文件部分的
+    m_iv[0].iov_base = m_write_buf;
+    m_iv[0].iov_len = m_write_idx;
+    m_iv_count = 1;
+    bytes_to_send = m_write_idx;
+
+    return true;
+}
+
+//process_write相关函数
+//仿照printf格式化输出到m_write_buf
+bool http_conn::add_response(const char* format, ...) {
+    if(m_write_idx > WRITE_BUFFER_SIZE)
+        return false;
+
+    va_list arg_list;
+    va_start(arg_list, format);
+    int len = vsnprintf(m_write_buf + m_write_idx, WRITE_BUFFER_SIZE - m_write_idx - 1, format, arg_list);
+    if(len >= WRITE_BUFFER_SIZE - m_write_idx - 1) {
+        //实际长度大于最大能容纳的长度
+        va_end(arg_list);
+        return false;
+    }
+    m_write_idx += len;
+    va_end(arg_list);
+
+    LOF_INFO("request:%s", m_write_buf);
+
+    return true;
+}
+
+//http响应报文的状态行
+bool http_conn::add_status_line(int status, const char *title)
+{
+    return add_response("%s %d %s\r\n", "HTTP/1.1", status, title);
+}
+
+//http响应报文的首部字段
+bool http_conn::add_headers(int content_length)
+{
+    return add_content_length(content_length) && add_linger()
+        && add_blank_line() && add_content_type();
+}
+
+bool http_conn::add_content_length(int content_length)
+{
+    return add_response("Content-Length:%d\r\n", content_length);
+}
+
+//其实未指定也默认为text/html
+bool http_conn::add_content_type()
+{
+    return add_response("Content-Type:%s\r\n", "text/html");
+}
+
+bool http_conn::add_linger()
+{
+    return add_response("Connection:%s\r\n", (m_linger == true) ? "keep-alive" : "close");
+}
+
+bool http_conn::add_blank_line()
+{
+    return add_response("%s", "\r\n");
+}
+
+bool http_conn::add_content(const char *content)
+{
+    return add_response("%s", content);
+}
+
+//整个处理流程，处理读和写的结果
+//真正的read, write交给主进程epoll
+void http_conn::process() {
+    HTTP_CODE read_ret = process_read();
+    if(read_ret == NO_REQUEST) {
+        modfd(m_epollfd, m_sockfd, EPOLLIN, m_TRIGMode);
+        return ;
+    }
+
+    bool write_ret = process_write(read_ret);
+    if(!write_ret) {
+        close_conn();
+    }
+
+    //更新EPOLLOUT事件
+    modfd(m_epollfd, m_sockfd, EPOLLOUT, m_TRIGMode);
+}
