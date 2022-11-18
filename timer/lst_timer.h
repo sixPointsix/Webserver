@@ -9,6 +9,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <sys/epoll.h>
+#include <assert.h>
 #include "../log/log.h"
 
 class util_timer;

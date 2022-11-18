@@ -1,4 +1,5 @@
 #include "lst_timer.h"
+#include "../http_conn/http_conn.h"
 
 sort_timer_list::~sort_timer_list() {
     auto tmp = head;
@@ -19,7 +20,7 @@ void sort_timer_list::add_timer(util_timer* timer) {
     if(timer->expire < head->expire) {
         timer->next = head;
         timer->pre = nullptr;
-        head->pre = next;
+        head->pre = timer;
         head = timer;
         return ;
     } else {
@@ -71,8 +72,8 @@ void sort_timer_list::del_timer(util_timer* timer) {
 }
 
 void sort_timer_list::add_timer(util_timer* timer, util_timer* lst_head) {
-    auto prev = lst_timer
-    auto p = lst_timer->next;
+    auto prev = lst_head;
+    auto p = lst_head->next;
 
     while(p) {
         if(timer->expire < p->expire) {
@@ -82,7 +83,7 @@ void sort_timer_list::add_timer(util_timer* timer, util_timer* lst_head) {
             p->pre = timer;
             break;
         }
-        pre = p;
+        prev = p;
         p = p->next;
     }
     if(!p) { //说明是新tail
@@ -110,11 +111,13 @@ void sort_timer_list::tick() {
     }
 }
 
-void Utils::init(int timeslot): m_TIMESLOT(timeslot) {}
+void Utils::init(int timeslot) {
+    m_TIMESLOT = timeslot;
+}
 
 int Utils::setnonblocking(int fd) {
     int old_option = fcntl(fd, F_GETFL);
-    int new_potion = old_option | O_NONBLOCK;
+    int new_option = old_option | O_NONBLOCK;
     fcntl(fd, F_SETFL, new_option);
 
     return old_option;
@@ -132,4 +135,42 @@ void Utils::addfd(int epollfd, int fd, bool one_shot, int TRIGMode) {
     if(one_shot) ev.events |= EPOLLONESHOT;
     epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &ev);
     setnonblocking(fd);
+}
+
+//信号处理函数，所做的任务就是把信号传递给主线程
+void Utils::sig_handler(int sig) {
+    int save_errno = errno; //可重入
+    int msg = sig;
+    send(u_pipefd[1], (char*)&msg, 1, 0);
+    errno = save_errno;
+}
+
+void Utils::addsig(int sig, void(handler)(int), bool restart) {
+    struct sigaction sa;
+    memset(&sa, '\0', sizeof sa);
+    sa.sa_handler = handler;
+    if(restart) sa.sa_flags |= SA_RESTART;
+    sigfillset(&sa.sa_mask);
+    assert(sigaction(sig, &sa, NULL) != -1);
+}
+
+void Utils::timer_handler() {
+    m_timer_lst.tick();
+    alarm(m_TIMESLOT);
+}
+
+void Utils::show_error(int connfd, const char* info) {
+    send(connfd, info, strlen(info), 0);
+    close(connfd);
+}
+
+int Utils::u_epollfd = 0;
+int *Utils::u_pipefd = NULL;
+
+class Utils; //向前声明
+void cb_func(client_data* user_data) {
+    epoll_ctl(Utils::u_epollfd, EPOLL_CTL_DEL, user_data->sockfd, NULL);
+    assert(user_data);
+    close(user_data->sockfd);
+    http_conn::m_user_count --;
 }
