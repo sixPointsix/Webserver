@@ -17,9 +17,26 @@ const char* error_500_form = "There was an unusual problem serving the request f
 locker m_lock;
 unordered_map<string, string> users;
 
-void http_conn::initmysql_result(connection_pool* connPool)
+void http_conn::initmysql_result(ConnectionPool* connPool)
 {
+    MYSQL* mysql = nullptr;
+    connection(&mysql, connPool);
 
+    if(mysql_query(mysql, "select username, passwd from user;")) {
+        LOG_ERROR("SELECT error:%s\n", mysql_error(mysql));
+    }
+
+    //取出查询结果至结果集
+    MYSQL_RES* result = mysql_store_result(mysql);
+    int num_fields = mysql_num_fields(result);
+    MYSQL_FIELD* fields = mysql_fetch_fields(result);
+
+    //从结果集中取出每一行到哈希表中
+    while(MYSQL_ROW row = mysql_fetch_row(result)) {
+        string username(row[0]);
+        string passwd(row[1]);
+        users[username] = passwd;
+    }
 }
 
 int setnonblocking(int fd) {

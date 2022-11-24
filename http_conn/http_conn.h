@@ -78,7 +78,7 @@ public:
     sockaddr_in* get_address() {
         return m_address;
     }
-    void initmysql_result(connection_pool* connPool);
+    void initmysql_result(ConnectionPool* connPool);
     int timer_flag; // 定时器标志
     int improv;
 

@@ -12,7 +12,7 @@ template<class T>
 class threadpool
 {
 public:
-    threadpool(int actor_model, connection_pool *connPool, int thread_number = 8, int max_request = 10000);
+    threadpool(int actor_model, ConnectionPool *connPool, int thread_number = 8, int max_request = 10000);
     ~threadpool();
     bool append(T* request, int state);
     bool append_p(T* request); // proactor模式添加任务
@@ -29,12 +29,12 @@ private:
     locker m_queuelocker; //请求队列的互斥锁
     sem m_queuestat; //是否有任务需要处理
     bool m_stop; //是否结束线程池
-    connection_pool *m_connPool;//数据库
+    ConnectionPool *m_connPool;//数据库连接池
     int m_actor_model; //模型切换
 };
 
 template <class T>
-threadpool<T>::threadpool(int actor_model, connection_pool* connPool, int thread_number, int max_requests) :
+threadpool<T>::threadpool(int actor_model, ConnectionPool* connPool, int thread_number, int max_requests) :
     m_actor_model(actor_model), m_connPool(connPool), m_thread_number(thread_number), m_max_requests(max_requests),
     m_stop(false), m_threads(nullptr)
 {
@@ -123,7 +123,7 @@ void run() {
             if(request->m_state == 0) { //read
                 if(request->read_once()) {
                     request->improv = 1;
-                    connectionRAII mysqlcon(&request->mysql, m_connPool);
+                    connection mysqlcon(&request->mysql, m_connPool);
                     request->process();
                 }
                 else {
@@ -141,7 +141,7 @@ void run() {
                 }
             }
         } else { //模拟Proactor模式
-            connectionRAII mysqlcon(&request->mysql, m_connPool);
+            connection mysqlcon(&request->mysql, m_connPool);
             request->process();
         }
     }
