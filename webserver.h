@@ -11,6 +11,8 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <cstring>
+#include <time.h>
+#include <signal.h>
 
 #include "threadpool.h"
 #include "http_conn/http_conn.h"
@@ -18,7 +20,7 @@
 
 const int MAX_FD = 65535; // 最大文件描述符数
 const int MAX_EVENT_NUMBER = 10000; //最大连接数
-const int TIME_SLOT = 5; //最小超时单位
+const int TIMESLOT = 5; //最小超时单位
 
 class WebServer() {
 public:

@@ -27,7 +27,7 @@ class util_timer
 public:
     util_timer(): pre(NULL), next(NULL) {}
 public:
-    time_t expire; //绝对时间
+    time_t expire; //超时的绝对时间
     void (*cb_func)(client_data*); //任务回调函数
     client_data* user_data;
     util_timer *pre, *next;
