@@ -8,13 +8,16 @@
 #include <unistd.h>
 #include <iostream>
 #include <assert.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <cstring>
 
 #include "threadpool.h"
 #include "http_conn/http_conn.h"
 #include "sql_connection_pool/sql_connection_pool.h"
 
 const int MAX_FD = 65535; // 最大文件描述符数
-const int MAX_EVENT_NUMBER = 10000; //最大时间数
+const int MAX_EVENT_NUMBER = 10000; //最大连接数
 const int TIME_SLOT = 5; //最小超时单位
 
 class WebServer() {
@@ -22,7 +25,7 @@ public:
     WebServer();
     ~WebServer();
 
-    void init(int port, string user, string passwd, string dbName,
+    void init(int port, string user, string passwd, string databaseName,
             int log_write, int opt_linger, int trigmode, int sql_num,
             int thread_num, int close_log, int actor_model);
 
@@ -44,8 +47,8 @@ public:
 public:
     int m_port;
     char* m_root;
-    int m_log_write;
-    int m_close_log;
+    int m_log_write; //日志写入方式
+    int m_close_log; //日志是否关闭，0同1异
     int m_actormodel;
 
     int m_pipefd[2];
@@ -56,8 +59,7 @@ public:
     ConnectionPool* m_connPool;
     string m_user;
     string m_passwd;
-    string m_databasename;
-    strubg m_dbName;
+    string m_databaseName;
     int m_sql_num;
 
     //threadpool
