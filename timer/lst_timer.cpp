@@ -154,6 +154,7 @@ void Utils::addsig(int sig, void(handler)(int), bool restart) {
     assert(sigaction(sig, &sa, NULL) != -1);
 }
 
+//timer_handler--->tick--->cb_func
 void Utils::timer_handler() {
     m_timer_lst.tick();
     alarm(m_TIMESLOT);

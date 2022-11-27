@@ -19,6 +19,7 @@
 #include <stdarg.h> //变参数函数
 #include <netinet/in.h>
 #include <sys/uio.h>
+#include <unordered_map>
 
 #include "../locker/locker.h"
 #include "../threadpool.h"
@@ -76,7 +77,7 @@ public:
     bool write(); //非阻塞写
 
     sockaddr_in* get_address() {
-        return m_address;
+        return &m_address;
     }
     void initmysql_result(ConnectionPool* connPool);
     int timer_flag; // 定时器标志

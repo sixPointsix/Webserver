@@ -1,4 +1,4 @@
-#ifndef _THREADPOOK_H_
+#ifndef _THREADPOOL_H_
 #define _THREADPOOL_H_
 
 #include <iostream>
@@ -66,13 +66,13 @@ threadpool<T>::~threadpool() {
 }
 
 template <class T> 
-bool append(T* request, int state) {
+bool threadpool<T>::append(T* request, int state) {
     m_queuelocker.lock();
     if(m_workqueue.size() >=  m_max_requests) {
         m_queuelocker.unlock();
         return false;
     }
-    request.m_state = state;
+    request->m_state = state;
     m_workqueue.push_back(request);
     m_queuelocker.unlock();
     m_queuestat.post();
@@ -81,7 +81,7 @@ bool append(T* request, int state) {
 }
 
 template <class T>
-bool append_p(T* request) {
+bool threadpool<T>::append_p(T* request) {
     m_queuelocker.lock();
     if(m_workqueue.size() >= m_max_requests) {
         m_queuelocker.unlock();
@@ -95,15 +95,15 @@ bool append_p(T* request) {
 }
 
 template <class T>
-void* worker(void* arg) {
-    threadpool* pool = (thread*)arg;
+void* threadpool<T>::worker(void* arg) {
+    threadpool* pool = (threadpool*)arg;
     pool->run();
 
     return pool;
 }
 
 template <class T>
-void run() {
+void threadpool<T>::run() {
     while(1)
     {
         //取出任务
@@ -119,7 +119,7 @@ void run() {
 
         //运行任务
         if(!request) continue;
-        if(m_actor_model == 1) { // Reactor模式，要区分读写线程，读为0，写为1
+        if(m_actor_model == 1) { // Reactor模式，要区分读写线程，读为1，写为1
             if(request->m_state == 0) { //read
                 if(request->read_once()) {
                     request->improv = 1;

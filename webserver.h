@@ -17,12 +17,13 @@
 #include "threadpool.h"
 #include "http_conn/http_conn.h"
 #include "sql_connection_pool/sql_connection_pool.h"
+#include "timer/lst_timer.h"
 
 const int MAX_FD = 65535; // 最大文件描述符数
 const int MAX_EVENT_NUMBER = 10000; //最大连接数
 const int TIMESLOT = 5; //最小超时单位
 
-class WebServer() {
+class WebServer {
 public:
     WebServer();
     ~WebServer();
@@ -35,7 +36,7 @@ public:
     void sql_pool();
     void log_write();
     void trig_mode();
-    void eventlisten();
+    void eventListen();
     void eventLoop();
     void timer(int connfd, struct sockaddr_in client_address);
     void adjust_timer(util_timer* timer);
