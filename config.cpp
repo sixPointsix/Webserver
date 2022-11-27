@@ -14,7 +14,7 @@ Config::Config() {
     actor_model = 0; //默认proactor
 }
 
-Config::~Config() {
+void Config::parse_arg(int argc, char* argv[]) {
     int opt;
     const char *str = "p:l:m:o:s:t:c:a:";
     // -p -l -m -o -s -t -c -a

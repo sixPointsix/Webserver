@@ -9,8 +9,8 @@ class Config
 {
 public:
     Config();
-    ~Config();
-    void parse_argh(int argc, char* argv[]);
+    ~Config() {};
+    void parse_arg(int argc, char* argv[]);
 
     int PORT;
     int LOGWrite; //日志同步/异步
