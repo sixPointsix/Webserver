@@ -30,7 +30,7 @@ private:
     sem m_queuestat; //是否有任务需要处理
     bool m_stop; //是否结束线程池
     ConnectionPool *m_connPool;//数据库连接池
-    int m_actor_model; //模型切换
+    int m_actor_model; //模型
 };
 
 template <class T>

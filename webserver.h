@@ -18,6 +18,7 @@
 #include "http_conn/http_conn.h"
 #include "sql_connection_pool/sql_connection_pool.h"
 #include "timer/lst_timer.h"
+#include "log/log.h"
 
 const int MAX_FD = 65535; // 最大文件描述符数
 const int MAX_EVENT_NUMBER = 10000; //最大连接数

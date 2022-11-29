@@ -34,7 +34,7 @@ void WebServer::init(int port, string user, string passwd, string databaseName,
 {
     m_port = port;
     m_user = user;
-    m_databaseName = m_databaseName;
+    m_databaseName = databaseName;
     m_passwd = passwd;
     m_sql_num = sql_num;
     m_thread_num = thread_num;
@@ -60,11 +60,12 @@ void WebServer::sql_pool() {
 void WebServer::log_write() {
     if(m_close_log == 0) {
         //日志初始化
+        cout << "m_log_write:" << m_log_write << endl;
         if(m_log_write == 1) {
-            Log::get_instance()->init("./serverLog", 2000, 1000000, 1000);
+            Log::get_instance()->init("serverLog", 2000, 1000000, 1000);
         }
         else {
-            Log::get_instance()->init("./serverLog", 2000, 1000000, 0);
+            Log::get_instance()->init("serverLog", 2000, 1000000, 0);
         }
     }
 }
@@ -125,7 +126,7 @@ void WebServer::eventListen() {
     assert(ret >= 0);
 
     //epoll
-    //struct epoll_event events[MAX_EVENT_NUMBER];
+    struct epoll_event events[MAX_EVENT_NUMBER];
     m_epollfd = epoll_create(5);
     assert(m_epollfd != -1);
 
@@ -152,6 +153,7 @@ void WebServer::eventLoop() {
     bool stop_server = false;
 
     while(!stop_server) {
+        cout << "start server" << endl;
         int number = epoll_wait(m_epollfd, events, MAX_EVENT_NUMBER, -1);
         if(number < 0 && errno != EINTR) {
             LOG_ERROR("%s", "epoll failure");
@@ -170,7 +172,7 @@ void WebServer::eventLoop() {
                 util_timer* timer = users_timer[sockfd].timer;
                 deal_timer(timer, sockfd);
             }
-            else if(sockfd == m_pipefd[0] && events[i].events & EPOLLIN) {
+            else if(sockfd == m_pipefd[0] && (events[i].events & EPOLLIN)) {
                 //处理信号
                 bool flag = deal_signal(timeout, stop_server);
                 if(!flag) {
@@ -232,7 +234,7 @@ void WebServer::deal_timer(util_timer* timer, int sockfd) {
         utils.m_timer_lst.del_timer(timer);
     }
 
-    LOG_INFO("close fd %d", "users_timer[sockfd].sockfd");
+    LOG_INFO("close fd %d", users_timer[sockfd].sockfd);
 }
 
 bool WebServer::deal_clientdata() {

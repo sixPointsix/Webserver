@@ -137,6 +137,7 @@ void Log::write_log(int log_level, const char* format, ...)
     log_str = m_buf;
     m_mutex.unlock();
 
+    cout << log_str;
     //同步就直接写，异步就加入阻塞队列
     if(m_is_async && !m_log_queue->full()) {
         auto res = m_log_queue->push(log_str);

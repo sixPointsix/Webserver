@@ -24,7 +24,8 @@
 #include "../locker/locker.h"
 #include "../threadpool.h"
 #include "../sql_connection_pool/sql_connection_pool.h"
-// #include "../timer/"
+#include "../log/log.h"
+#include "../timer/lst_timer.h"
 
 class http_conn
 {
@@ -48,7 +49,7 @@ public:
     };
     //http主状态机
     enum CHECK_STATE {
-        CHECK_STATE_QUESTLINE = 0,
+        CHECK_STATE_REQUESTLINE = 0,
         CHECK_STATE_HEADER,
         CHECK_STATE_CONTENT
     };
@@ -106,7 +107,7 @@ private:
 
     //下面一组函数被process_write()调用共同实现http应答的填充
     void unmap();
-    void add_response(const char* format, ...); //变参数函数
+    bool add_response(const char* format, ...); //变参数函数
     bool add_status_line(int status, const char* title);
     bool add_headers(int content_length);
     bool add_content(const char* content);
@@ -126,7 +127,7 @@ private:
     int m_checked_idx;
     int m_start_line; //正在解析的行的起始位置
 
-    char m_wirte_buf[WRITE_BUFFER_SIZE];
+    char m_write_buf[WRITE_BUFFER_SIZE];
     int m_write_idx;
 
     //主状态机状态
@@ -138,7 +139,7 @@ private:
     char* m_version;
     char* m_host;
     int m_content_length;
-    bool linger; //keep-alive 标志
+    bool m_linger; //keep-alive 标志
 
     //把目标文件mmap到的位置
     char* m_file_address;

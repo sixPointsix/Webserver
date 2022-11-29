@@ -1,4 +1,8 @@
 #include "config.h"
+#include "log/log.h"
+#include <iostream>
+
+using namespace std;
 
 int main(int argc, char* argv[]) {
     string user = "root";
@@ -22,6 +26,7 @@ int main(int argc, char* argv[]) {
     //监听
     server.eventListen();
 
+    cout << "eventLoop" << endl;
     //开始运行
     server.eventLoop();
 

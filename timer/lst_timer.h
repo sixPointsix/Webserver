@@ -54,8 +54,8 @@ private:
 class Utils
 {
 public:
-    Utils();
-    ~Utils();
+    Utils() {}
+    ~Utils() {}
     void init(int timeslot);
     int setnonblocking(int fd);
     void addfd(int epollfd, int fd, bool one_shot, int TRIGMode);
