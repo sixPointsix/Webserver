@@ -2,7 +2,7 @@
 
 Config::Config() {
     PORT = 9999;
-    LOGWrite = 0; //默认同步
+    LOGWrite = 1; //默认同步
     TRIGMode = 0; //默认组合LT + LT
     LISTENTrigmode = 0;
     CONNTrigmode = 0;

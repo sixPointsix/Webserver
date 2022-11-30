@@ -36,7 +36,6 @@ void http_conn::initmysql_result(ConnectionPool* connPool)
     while(MYSQL_ROW row = mysql_fetch_row(result)) {
         string username(row[0]);
         string passwd(row[1]);
-        cout << username << ' ' << passwd << endl;
         users[username] = passwd;
     }
 }
@@ -362,8 +361,8 @@ http_conn::HTTP_CODE http_conn::do_request() {
         for(i = 5; m_string[i] != '&'; ++ i)
             username += m_string[i];
 
-        for(i = i + 10, j = 0; m_string[i]; ++ i, ++ j)
-            password += m_string[j];
+        for(i = i + 10; m_string[i]; ++ i)
+            password += m_string[i];
 
         if(*(p + 1) == '2') { //登录
             if(users[username] == password) {
